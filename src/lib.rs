@@ -4,12 +4,13 @@ use std::{
     time::Instant,
 };
 
-use crate::driver::{Button, ButtonLed, Report, WheelLed, WheelMode};
-
 mod driver;
 mod error;
 
-pub use error::Error;
+use crate::driver::WheelMode;
+
+pub use crate::driver::{Button, ButtonLed, Report, WheelLed};
+pub use crate::error::Error;
 
 pub struct SpeedEditor {
     inner: Arc<Mutex<Inner>>,
@@ -25,6 +26,7 @@ impl SpeedEditor {
 
             on_wheel_change: None,
             on_button_change: None,
+            on_battery_info: None,
         }));
 
         thread::Builder::new().name("bmd_speed_editor_poller".to_string()).spawn({
@@ -51,6 +53,15 @@ impl SpeedEditor {
 
     pub fn set_on_button_change<F: Fn(Button, bool) + Send + 'static>(&mut self, f: F) {
         self.inner.lock().unwrap().on_button_change = Some(Box::new(f));
+    }
+
+    pub fn on_battery_info<F: Fn(bool, u8) + Send + 'static>(mut self, f: F) -> Self {
+        self.set_on_battery_info(f);
+        self
+    }
+
+    pub fn set_on_battery_info<F: Fn(bool, u8) + Send + 'static>(&mut self, f: F) {
+        self.inner.lock().unwrap().on_battery_info = Some(Box::new(f));
     }
 
     pub fn is_button_pressed(&self, button: Button) -> bool {
@@ -120,21 +131,21 @@ fn poller(inner: Arc<Mutex<Inner>>) -> Result<(), crate::Error> {
         match report {
             Report::Wheel { mode, value } => {
                 if let WheelMode::Relative = mode {
-                    let inner = inner.lock().unwrap();
+                    let inner_guard = inner.lock().unwrap();
 
-                    if let Some(on_wheel_change) = &inner.on_wheel_change {
+                    if let Some(on_wheel_change) = &inner_guard.on_wheel_change {
                         on_wheel_change(value);
                     }
                 }
             }
             Report::Buttons(buttons) => {
-                let mut inner = inner.lock().unwrap();
+                let mut inner_guard = inner.lock().unwrap();
 
                 // Save previous pressed buttons for comparison
-                let prev_pressed = inner.pressed_buttons.clone();
-                inner.pressed_buttons = buttons.clone();
+                let prev_pressed = inner_guard.pressed_buttons.clone();
+                inner_guard.pressed_buttons = buttons.clone();
 
-                if let Some(on_button_change) = &inner.on_button_change {
+                if let Some(on_button_change) = &inner_guard.on_button_change {
                     // For all buttons that were previously pressed but are not in the new list, call with false
                     for button in prev_pressed.iter() {
                         if !buttons.contains(button) {
@@ -148,8 +159,12 @@ fn poller(inner: Arc<Mutex<Inner>>) -> Result<(), crate::Error> {
                     }
                 }
             }
-            Report::Battery { .. } => {
-                // FIXME: Do something with battery information.
+            Report::Battery { charging, level } => {
+                let inner_guard = inner.lock().unwrap();
+
+                if let Some(on_battery_info) = &inner_guard.on_battery_info {
+                    on_battery_info(charging, level);
+                }
             }
         }
     }
@@ -160,6 +175,8 @@ struct Inner {
     button_led: ButtonLed,
     wheel_led: WheelLed,
 
+    // FIXME: param names in callbacks?
     on_wheel_change: Option<Box<dyn Fn(i32) + Send>>,
     on_button_change: Option<Box<dyn Fn(Button, bool) + Send>>,
+    on_battery_info: Option<Box<dyn Fn(bool, u8) + Send>>,
 }
