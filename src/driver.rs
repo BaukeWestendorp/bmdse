@@ -222,7 +222,7 @@ impl TryFrom<u8> for WheelMode {
         match value {
             0x00 => Ok(WheelMode::Relative),
             0x01 => Ok(WheelMode::AbsoluteContinuous),
-            0x02 => Ok(WheelMode::Relative), // FIXME: 0x00 and 0x02 appear to be the same.
+            0x02 => Ok(WheelMode::Relative), // NOTE: 0x00 and 0x02 appear to be the same.
             0x03 => Ok(WheelMode::AbsoluteDeadZero),
             _ => Err(crate::Error::Driver { message: "received invalid wheel mode" }),
         }
