@@ -175,7 +175,6 @@ struct Inner {
     button_led: ButtonLed,
     wheel_led: WheelLed,
 
-    // FIXME: param names in callbacks?
     on_wheel_change: Option<Box<dyn Fn(i32) + Send>>,
     on_button_change: Option<Box<dyn Fn(Button, bool) + Send>>,
     on_battery_info: Option<Box<dyn Fn(bool, u8) + Send>>,
