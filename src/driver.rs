@@ -14,11 +14,11 @@ pub enum Report {
 }
 
 impl TryFrom<&[u8]> for Report {
-    type Error = anyhow::Error;
+    type Error = crate::Error;
 
     fn try_from(bytes: &[u8]) -> Result<Self, Self::Error> {
         if bytes.is_empty() {
-            anyhow::bail!("");
+            return Err(Self::Error::Driver { message: "" });
         }
 
         let report_id = bytes[0];
@@ -26,7 +26,9 @@ impl TryFrom<&[u8]> for Report {
         let report = match report_id {
             0x03 => {
                 if bytes.len() != 7 {
-                    anyhow::bail!("invalid length for wheel report");
+                    return Err(crate::Error::Driver {
+                        message: "invalid length for wheel report",
+                    });
                 }
                 Report::Wheel {
                     mode: WheelMode::try_from(bytes[1])?,
@@ -35,7 +37,9 @@ impl TryFrom<&[u8]> for Report {
             }
             0x04 => {
                 if bytes.len() != 13 {
-                    anyhow::bail!("invalid length for button report");
+                    return Err(crate::Error::Driver {
+                        message: "invalid length for button report",
+                    });
                 }
 
                 let mut buttons = Vec::new();
@@ -50,13 +54,15 @@ impl TryFrom<&[u8]> for Report {
             }
             0x07 => {
                 if bytes.len() != 3 {
-                    anyhow::bail!("invalid length for battery report");
+                    return Err(crate::Error::Driver {
+                        message: "invalid length for battery report",
+                    });
                 }
 
                 Report::Battery { charging: bytes[1] == 0x01, level: bytes[2] }
             }
             _ => {
-                anyhow::bail!("unknown report");
+                return Err(crate::Error::Driver { message: "unknown report" });
             }
         };
 
@@ -149,7 +155,7 @@ impl Button {
 }
 
 impl TryFrom<u16> for Button {
-    type Error = anyhow::Error;
+    type Error = crate::Error;
 
     fn try_from(value: u16) -> Result<Self, Self::Error> {
         match value {
@@ -196,7 +202,7 @@ impl TryFrom<u16> for Button {
             0x001c => Ok(Button::Shuttle),
             0x001d => Ok(Button::Jog),
             0x001e => Ok(Button::Scroll),
-            _ => anyhow::bail!("invalid button value: 0x{:04x}", value),
+            _ => Err(crate::Error::Driver { message: "invalid button value received" }),
         }
     }
 }
@@ -210,7 +216,7 @@ pub enum WheelMode {
 }
 
 impl TryFrom<u8> for WheelMode {
-    type Error = anyhow::Error;
+    type Error = crate::Error;
 
     fn try_from(value: u8) -> Result<Self, Self::Error> {
         match value {
@@ -218,7 +224,7 @@ impl TryFrom<u8> for WheelMode {
             0x01 => Ok(WheelMode::AbsoluteContinuous),
             0x02 => Ok(WheelMode::Relative), // FIXME: 0x00 and 0x02 appear to be the same.
             0x03 => Ok(WheelMode::AbsoluteDeadZero),
-            _ => anyhow::bail!("invalid wheel mode: 0x{:02x}", value),
+            _ => Err(crate::Error::Driver { message: "received invalid wheel mode" }),
         }
     }
 }
@@ -266,15 +272,15 @@ pub enum Led {
     Wheel(WheelLed),
 }
 
-pub fn get_hid_device() -> anyhow::Result<HidDevice> {
-    let api = HidApi::new().context("HID API already initialized")?;
+pub fn get_hid_device() -> Result<HidDevice, crate::Error> {
+    let api = HidApi::new().map_err(|_| crate::Error::HidApiAlreadyInitialized)?;
 
-    let device = api.open(VENDOR_ID, PRODUCT_ID).context("cannot open HID device")?;
+    let device = api.open(VENDOR_ID, PRODUCT_ID).map_err(|_| crate::Error::CannotOpenHidDevice)?;
 
     Ok(device)
 }
 
-pub fn authenticate(device: &mut HidDevice) -> anyhow::Result<u16> {
+pub fn authenticate(device: &mut HidDevice) -> Result<u16, crate::Error> {
     let mut buf = [0x00; 10];
 
     // The authentication is performed over SET_FEATURE/GET_FEATURE on
@@ -283,45 +289,49 @@ pub fn authenticate(device: &mut HidDevice) -> anyhow::Result<u16> {
     // Reset the auth state machine
     device
         .send_feature_report(&[0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        .context("failed to send auth reset")?;
+        .map_err(|_| crate::Error::Driver { message: "failed to send auth reset" })?;
 
     fn get_feature<'a>(
         buf: &'a mut [u8; 10],
         device: &HidDevice,
-    ) -> Result<&'a [u8], anyhow::Error> {
+    ) -> Result<&'a [u8], crate::Error> {
         // Prepare buffer and set the Report ID (0x06) before requesting it.
         // hidapi requires buf[0] to contain the report id for GET_FEATURE.
         *buf = [0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
-        let len = device.get_feature_report(buf).context("failed to get feature report")?;
+        let len = device
+            .get_feature_report(buf)
+            .map_err(|_| crate::Error::Driver { message: "failed to get feature report" })?;
         Ok(&buf[..len])
     }
 
     // Read the keyboard challenge (for keyboard to authenticate app)
-    let data = get_feature(&mut buf, device).context("failed to get keyboard challenge")?;
+    let data = get_feature(&mut buf, device)
+        .map_err(|_| crate::Error::Driver { message: "failed to get keyboard challenge" })?;
     if data.len() < 10 {
-        anyhow::bail!("authentication failed");
+        return Err(crate::Error::Driver { message: "authentication failed" });
     }
     if data[0] != 0x06 || data[1] != 0x00 {
-        anyhow::bail!("authentication failed");
+        return Err(crate::Error::Driver { message: "authentication failed" });
     }
-    let challenge = u64::from_le_bytes(
-        data[2..10].try_into().context("failed to parse keyboard challenge bytes")?,
-    );
+    let challenge = u64::from_le_bytes(data[2..10].try_into().map_err(|_| {
+        crate::Error::Driver { message: "failed to parse keyboard challenge bytes" }
+    })?);
 
     // Send our challenge (to authenticate keyboard)
     // We don't care ... so just send 0x0000000000000000
     device
         .send_feature_report(&[0x06, 0x01, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
-        .context("failed to send challenge feature")?;
+        .map_err(|_| crate::Error::Driver { message: "failed to send challenge feature" })?;
 
     // Read the keyboard response
     // Again, we don't care, ignore the result
-    let data = get_feature(&mut buf, device).context("failed to get keyboard response")?;
+    let data = get_feature(&mut buf, device)
+        .map_err(|_| crate::Error::Driver { message: "failed to get keyboard response" })?;
     if data.len() < 10 {
-        anyhow::bail!("authentication failed");
+        return Err(crate::Error::Driver { message: "authentication failed" });
     }
     if data[0] != 0x06 || data[1] != 0x02 {
-        anyhow::bail!("authentication failed");
+        return Err(crate::Error::Driver { message: "authentication failed" });
     }
 
     // Compute and send our response
@@ -329,15 +339,16 @@ pub fn authenticate(device: &mut HidDevice) -> anyhow::Result<u16> {
     let rb = response.to_le_bytes();
     device
         .send_feature_report(&[0x06, 0x03, rb[0], rb[1], rb[2], rb[3], rb[4], rb[5], rb[6], rb[7]])
-        .context("failed to send challenge response")?;
+        .map_err(|_| crate::Error::Driver { message: "failed to send challenge response" })?;
 
     // Read the status
-    let data = get_feature(&mut buf, device).context("failed to get status")?;
+    let data = get_feature(&mut buf, device)
+        .map_err(|_| crate::Error::Driver { message: "failed to get status" })?;
     if data.len() < 10 {
-        anyhow::bail!("authentication failed");
+        return Err(crate::Error::Driver { message: "authentication failed" });
     }
     if data[0] != 0x06 || data[1] != 0x04 {
-        anyhow::bail!("authentication failed");
+        return Err(crate::Error::Driver { message: "authentication failed" });
     }
 
     // I "think" what gets returned here is the timeout after which auth
@@ -345,28 +356,32 @@ pub fn authenticate(device: &mut HidDevice) -> anyhow::Result<u16> {
     Ok(u16::from_le_bytes([data[2], data[3]]))
 }
 
-pub fn set_button_led(device: &mut HidDevice, led: ButtonLed) -> anyhow::Result<()> {
+pub fn set_button_led(device: &mut HidDevice, led: ButtonLed) -> Result<(), crate::Error> {
     let mut buf = [0u8; 5];
     buf[0] = 2;
     buf[1..5].copy_from_slice(&(led as u32).to_le_bytes());
-    device.write(&buf).context("failed to write LED state")?;
+    device
+        .write(&buf)
+        .map_err(|_| crate::Error::Driver { message: "failed to write LED state" })?;
     Ok(())
 }
 
-pub fn set_wheel_led(device: &mut HidDevice, led: WheelLed) -> anyhow::Result<()> {
+pub fn set_wheel_led(device: &mut HidDevice, led: WheelLed) -> Result<(), crate::Error> {
     let buf = [4u8, led as u8];
-    device.write(&buf).context("failed to write wheel LED state")?;
+    device
+        .write(&buf)
+        .map_err(|_| crate::Error::Driver { message: "failed to write wheel LED state" })?;
     Ok(())
 }
 
-pub fn set_wheel_mode(device: &mut HidDevice, wheel_mode: WheelMode) {
-    let mut buf = [0u8; 7];
-    buf[0] = 3;
-    buf[1] = wheel_mode as u8;
-    buf[2..6].copy_from_slice(&0u32.to_le_bytes());
-    buf[6] = 0; // unknown
-    let _ = device.write(&buf);
-}
+// pub fn set_wheel_mode(device: &mut HidDevice, wheel_mode: WheelMode) {
+//     let mut buf = [0u8; 7];
+//     buf[0] = 3;
+//     buf[1] = wheel_mode as u8;
+//     buf[2..6].copy_from_slice(&0u32.to_le_bytes());
+//     buf[6] = 0; // unknown
+//     let _ = device.write(&buf);
+// }
 
 fn bmd_kbd_auth(challenge: u64) -> u64 {
     const AUTH_EVEN_TBL: [u64; 8] = [
@@ -413,15 +428,18 @@ fn bmd_kbd_auth(challenge: u64) -> u64 {
     v ^ (v.rotate_right(8) & MASK) ^ k
 }
 
-pub fn poll(device: &mut HidDevice, timeout: i32) -> anyhow::Result<Report> {
+pub fn poll(device: &mut HidDevice, timeout: i32) -> Result<Report, crate::Error> {
     let mut buf = [0x00; 64];
-    let len = device.read_timeout(&mut buf, timeout).context("failed to read")?;
+    let len = device
+        .read_timeout(&mut buf, timeout)
+        .map_err(|_| crate::Error::Driver { message: "failed to read" })?;
     if len == 0 {
-        anyhow::bail!("received empty report");
+        return Err(crate::Error::Driver { message: "received empty report" });
     }
     let report_bytes = &buf[0..len];
 
-    let report = Report::try_from(report_bytes).context("failed to parse report")?;
+    let report = Report::try_from(report_bytes)
+        .map_err(|_| crate::Error::Driver { message: "failed to parse report" })?;
 
     Ok(report)
 }

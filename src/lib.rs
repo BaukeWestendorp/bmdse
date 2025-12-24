@@ -7,13 +7,16 @@ use std::{
 use crate::driver::{Button, ButtonLed, Report, WheelLed, WheelMode};
 
 mod driver;
+mod error;
+
+pub use error::Error;
 
 pub struct SpeedEditor {
     inner: Arc<Mutex<Inner>>,
 }
 
 impl SpeedEditor {
-    pub fn new() -> anyhow::Result<Self> {
+    pub fn new() -> Result<Self, crate::Error> {
         let inner = Arc::new(Mutex::new(Inner {
             absolute_wheel_value: Default::default(),
             pressed_buttons: Vec::new(),
@@ -25,13 +28,10 @@ impl SpeedEditor {
             on_button_change: None,
         }));
 
-        thread::Builder::new()
-            .name("bmd_speed_editor_poller".to_string())
-            .spawn({
-                let inner = Arc::clone(&inner);
-                move || poller(inner)
-            })
-            .context("failed to create poller thread")?;
+        thread::Builder::new().name("bmd_speed_editor_poller".to_string()).spawn({
+            let inner = Arc::clone(&inner);
+            move || poller(inner)
+        })?;
 
         Ok(Self { inner })
     }
@@ -70,7 +70,7 @@ impl SpeedEditor {
         self.inner.lock().unwrap().pressed_buttons.to_owned()
     }
 
-    pub fn set_wheel_led(&mut self, led: WheelLed) -> anyhow::Result<()> {
+    pub fn set_wheel_led(&mut self, led: WheelLed) -> Result<(), crate::Error> {
         self.inner.lock().unwrap().wheel_led = led;
         Ok(())
     }
@@ -79,7 +79,7 @@ impl SpeedEditor {
         self.inner.lock().unwrap().wheel_led
     }
 
-    pub fn set_button_led(&mut self, led: ButtonLed) -> anyhow::Result<()> {
+    pub fn set_button_led(&mut self, led: ButtonLed) -> Result<(), crate::Error> {
         self.inner.lock().unwrap().button_led = led;
         Ok(())
     }
@@ -89,12 +89,12 @@ impl SpeedEditor {
     }
 }
 
-fn poller(inner: Arc<Mutex<Inner>>) -> anyhow::Result<()> {
+fn poller(inner: Arc<Mutex<Inner>>) -> Result<(), crate::Error> {
     const MAX_POLL_MS: i32 = 16;
 
-    let mut hid_device = driver::get_hid_device().context("failed to get hid device")?;
+    let mut hid_device = driver::get_hid_device()?;
 
-    let mut auth_time = driver::authenticate(&mut hid_device).context("failed to authenticate")?;
+    let mut auth_time = driver::authenticate(&mut hid_device)?;
     let auth_instant = Instant::now();
 
     let mut last_button_led = None;
@@ -103,7 +103,7 @@ fn poller(inner: Arc<Mutex<Inner>>) -> anyhow::Result<()> {
     loop {
         // FIXME: The authentication does not repeat for some reason.
         if auth_instant.elapsed().as_secs() >= (auth_time - 5) as u64 {
-            auth_time = driver::authenticate(&mut hid_device).context("failed to authenticate")?;
+            auth_time = driver::authenticate(&mut hid_device)?;
         }
 
         {
@@ -174,7 +174,9 @@ fn poller(inner: Arc<Mutex<Inner>>) -> anyhow::Result<()> {
                     }
                 }
             }
-            Report::Battery { .. } => {}
+            Report::Battery { .. } => {
+                // FIXME: Do something with battery information.
+            }
         }
     }
 }
