@@ -18,7 +18,6 @@ pub struct SpeedEditor {
 impl SpeedEditor {
     pub fn new() -> Result<Self, crate::Error> {
         let inner = Arc::new(Mutex::new(Inner {
-            absolute_wheel_value: Default::default(),
             pressed_buttons: Vec::new(),
 
             button_led: ButtonLed::default(),
@@ -36,12 +35,12 @@ impl SpeedEditor {
         Ok(Self { inner })
     }
 
-    pub fn on_wheel_change<F: Fn(i32, i64) + Send + 'static>(mut self, f: F) -> Self {
+    pub fn on_wheel_change<F: Fn(i32) + Send + 'static>(mut self, f: F) -> Self {
         self.set_on_wheel_change(f);
         self
     }
 
-    pub fn set_on_wheel_change<F: Fn(i32, i64) + Send + 'static>(&mut self, f: F) {
+    pub fn set_on_wheel_change<F: Fn(i32) + Send + 'static>(&mut self, f: F) {
         self.inner.lock().unwrap().on_wheel_change = Some(Box::new(f));
     }
 
@@ -52,14 +51,6 @@ impl SpeedEditor {
 
     pub fn set_on_button_change<F: Fn(Button, bool) + Send + 'static>(&mut self, f: F) {
         self.inner.lock().unwrap().on_button_change = Some(Box::new(f));
-    }
-
-    pub fn absolute_wheel_value(&mut self) -> i64 {
-        self.inner.lock().unwrap().absolute_wheel_value
-    }
-
-    pub fn reset_absolute_wheel_value(&mut self) {
-        self.inner.lock().unwrap().absolute_wheel_value = Default::default();
     }
 
     pub fn is_button_pressed(&self, button: Button) -> bool {
@@ -144,12 +135,10 @@ fn poller(inner: Arc<Mutex<Inner>>) -> Result<(), crate::Error> {
         match report {
             Report::Wheel { mode, value } => {
                 if let WheelMode::Relative = mode {
-                    let mut inner = inner.lock().unwrap();
-
-                    inner.absolute_wheel_value += value as i64;
+                    let inner = inner.lock().unwrap();
 
                     if let Some(on_wheel_change) = &inner.on_wheel_change {
-                        on_wheel_change(value, inner.absolute_wheel_value);
+                        on_wheel_change(value);
                     }
                 }
             }
@@ -182,11 +171,10 @@ fn poller(inner: Arc<Mutex<Inner>>) -> Result<(), crate::Error> {
 }
 
 struct Inner {
-    absolute_wheel_value: i64,
     pressed_buttons: Vec<Button>,
     button_led: ButtonLed,
     wheel_led: WheelLed,
 
-    on_wheel_change: Option<Box<dyn Fn(i32, i64) + Send>>,
+    on_wheel_change: Option<Box<dyn Fn(i32) + Send>>,
     on_button_change: Option<Box<dyn Fn(Button, bool) + Send>>,
 }
