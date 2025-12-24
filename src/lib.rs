@@ -98,29 +98,14 @@ fn poller(inner: Arc<Mutex<Inner>>) -> Result<(), crate::Error> {
         }
 
         {
-            // FIXME: There must be a nicer way of doing these matches.
             let inner_guard = inner.lock().unwrap();
-            match (last_button_led, inner_guard.button_led) {
-                (Some(last_led), led) if last_led != led => {
-                    driver::set_button_led(&mut hid_device, led)?;
-                    last_button_led = Some(led);
-                }
-                (None, led) => {
-                    driver::set_button_led(&mut hid_device, led)?;
-                    last_button_led = Some(led);
-                }
-                _ => {}
+            if last_button_led.is_none_or(|last_led| last_led != inner_guard.button_led) {
+                driver::set_button_led(&mut hid_device, inner_guard.button_led)?;
+                last_button_led = Some(inner_guard.button_led);
             }
-            match (last_wheel_led, inner_guard.wheel_led) {
-                (Some(last_led), led) if last_led != led => {
-                    driver::set_wheel_led(&mut hid_device, led)?;
-                    last_wheel_led = Some(led);
-                }
-                (None, led) => {
-                    driver::set_wheel_led(&mut hid_device, led)?;
-                    last_wheel_led = Some(led);
-                }
-                _ => {}
+            if last_wheel_led.is_none_or(|last_led| last_led != inner_guard.wheel_led) {
+                driver::set_wheel_led(&mut hid_device, inner_guard.wheel_led)?;
+                last_wheel_led = Some(inner_guard.wheel_led);
             }
         }
 
