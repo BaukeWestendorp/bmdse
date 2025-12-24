@@ -9,11 +9,8 @@ fn main() {
         .on_button_change(|button, pressed| {
             eprintln!("button {button:?} {}", if pressed { "pressed" } else { "released" });
         })
-        .on_battery_info(|charging, battery| {
-            eprintln!(
-                "charging: {charging} | battery percentage: {:.0}%",
-                (battery as f32 / u8::MAX as f32) * 100.0
-            );
+        .on_battery_info(|charging, percentage| {
+            eprintln!("charging: {charging} | battery percentage: {percentage}%");
         });
 
     speed_editor.set_button_led(ButtonLed::Cam1).unwrap();
