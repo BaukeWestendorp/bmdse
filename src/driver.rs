@@ -374,14 +374,14 @@ pub fn set_wheel_led(device: &mut HidDevice, led: WheelLed) -> Result<(), crate:
     Ok(())
 }
 
-// pub fn set_wheel_mode(device: &mut HidDevice, wheel_mode: WheelMode) {
-//     let mut buf = [0u8; 7];
-//     buf[0] = 3;
-//     buf[1] = wheel_mode as u8;
-//     buf[2..6].copy_from_slice(&0u32.to_le_bytes());
-//     buf[6] = 0; // unknown
-//     let _ = device.write(&buf);
-// }
+pub fn _set_wheel_mode(device: &mut HidDevice, wheel_mode: WheelMode) {
+    let mut buf = [0u8; 7];
+    buf[0] = 3;
+    buf[1] = wheel_mode as u8;
+    buf[2..6].copy_from_slice(&0u32.to_le_bytes());
+    buf[6] = 0; // unknown
+    let _ = device.write(&buf);
+}
 
 fn bmd_kbd_auth(challenge: u64) -> u64 {
     const AUTH_EVEN_TBL: [u64; 8] = [
