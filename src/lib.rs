@@ -7,6 +7,8 @@ use std::{
 mod driver;
 mod error;
 
+use hidapi::HidDevice;
+
 use crate::driver::WheelMode;
 
 pub use crate::driver::{Button, ButtonLed, Report, WheelLed};
@@ -29,9 +31,10 @@ impl SpeedEditor {
             on_battery_info: None,
         }));
 
+        let hid_device = driver::get_hid_device()?;
         thread::Builder::new().name("bmd_speed_editor_poller".to_string()).spawn({
             let inner = Arc::clone(&inner);
-            move || poller(inner)
+            move || poller(hid_device, inner)
         })?;
 
         Ok(Self { inner })
@@ -91,12 +94,10 @@ impl SpeedEditor {
     }
 }
 
-fn poller(inner: Arc<Mutex<Inner>>) -> Result<(), crate::Error> {
+fn poller(mut hid_device: HidDevice, inner: Arc<Mutex<Inner>>) -> Result<(), crate::Error> {
     const MAX_POLL_MS: i32 = 16;
 
-    let mut hid_device = driver::get_hid_device()?;
-
-    let mut auth_time = driver::authenticate(&mut hid_device)?;
+    let mut auth_time = 600;
     let auth_instant = Instant::now();
 
     let mut last_button_led = None;
