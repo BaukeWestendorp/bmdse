@@ -103,8 +103,9 @@ fn poller(mut hid_device: HidDevice, inner: Arc<Mutex<Inner>>) -> Result<(), cra
     let mut last_button_led = None;
     let mut last_wheel_led = None;
 
+    driver::authenticate(&mut hid_device)?;
+
     loop {
-        // FIXME: The authentication does not repeat for some reason.
         if auth_instant.elapsed().as_secs() >= (auth_time - 5) as u64 {
             auth_time = driver::authenticate(&mut hid_device)?;
         }
