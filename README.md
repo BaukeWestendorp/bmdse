@@ -4,7 +4,7 @@ An interface for talking with a Black Magic Design Speed Editor using the HID AP
 
 ![Black Magic Design Speed Editor next to my cat Julius](bmdse.jpg)
 
-This library was created because I was missing MIDI functionality for the Speed Editor, when experimenting with controllers for my other project [zeevonk](https://github.com/BaukeWestendorp/zeevonk). I ended up writing this high-level API, with an internal low(er)-level driver, as I did not want to constantly manage another thread for the event polling in each of my small testing-purpouse applications.
+This library was created because I was missing MIDI functionality for the Speed Editor, when experimenting with controllers for my other project [zeevonk](https://github.com/BaukeWestendorp/zeevonk). I ended up writing this high-level API, with an internal low(er)-level driver, as I did not want to constantly manage another thread for the event polling in each of my small testing-purpose applications.
 
 This library has a **single** dependency: [hidapi](https://docs.rs/hidapi/latest/hidapi/)!
 
