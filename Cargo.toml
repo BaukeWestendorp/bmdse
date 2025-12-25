@@ -4,7 +4,7 @@ description = "An interface for talking with a Black Magic Design Speed Editor u
 version = "0.1.0"
 edition = "2024"
 license = "MIT"
-keywords = ["black magic design", "speed editor", "hid"]
+keywords = ["black-magic-design", "speed-editor", "hid"]
 categories = ["api-bindings"]
 repository = "https://github.com/BaukeWestendorp/bmdse"
 
