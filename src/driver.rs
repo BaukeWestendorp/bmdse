@@ -128,7 +128,7 @@ pub enum Button {
 impl Button {
     /// Returns the associated [`Led`] for this button, if it has one.
     /// As some buttons do not have a LED, it might return [`None`].
-    pub fn led(&self) -> Option<Led> {
+    pub fn to_led(&self) -> Option<Led> {
         match self {
             Button::CloseUp => Some(Led::Button(ButtonLed::CloseUp)),
             Button::Cut => Some(Led::Button(ButtonLed::Cut)),
