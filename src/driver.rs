@@ -70,8 +70,10 @@ impl TryFrom<&[u8]> for Report {
     }
 }
 
+/// Any physical button on the Speed Editor.
 #[repr(u16)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[allow(missing_docs)]
 pub enum Button {
     SmartInsert = 0x0001,
     Append = 0x0002,
@@ -124,6 +126,8 @@ pub enum Button {
 }
 
 impl Button {
+    /// Returns the associated [`Led`] for this button, if it has one.
+    /// As some buttons do not have a LED, it might return [`None`].
     pub fn led(&self) -> Option<Led> {
         match self {
             Button::CloseUp => Some(Led::Button(ButtonLed::CloseUp)),
@@ -229,8 +233,15 @@ impl TryFrom<u8> for WheelMode {
     }
 }
 
+/// Any LED that is on one of the buttons, that is not a [`WheelLed`].
+///
+/// The speed editor can only enable two LEDs at once.
+/// One in each of the [Wheel LED][WheelLed]s and [Button LED][ButtonLed]s groups.
+///
+/// The [`Off`][ButtonLed::Off] variant can be used to disable all button LEDs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[repr(u32)]
+#[allow(missing_docs)]
 pub enum ButtonLed {
     #[default]
     Off = 0,
@@ -255,8 +266,15 @@ pub enum ButtonLed {
     AudioOnly = 1 << 17,
 }
 
+/// Any LED that is on one of the buttons, that is not a [`ButtonLed`].
+///
+/// The speed editor can only enable two LEDs at once.
+/// One in each of the [Wheel LED][WheelLed]s and [Button LED][ButtonLed]s groups.
+///
+/// The [`Off`][WheelLed::Off] variant can be used to disable all wheel LEDs.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, Default)]
 #[repr(u32)]
+#[allow(missing_docs)]
 pub enum WheelLed {
     #[default]
     Off = 0,

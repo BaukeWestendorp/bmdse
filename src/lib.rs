@@ -1,3 +1,76 @@
+#![warn(missing_docs)]
+
+//! # Black Magic Design Speed Editor
+//!
+//! An interface for talking with a Black Magic Design Speed Editor using the HID API in written in Rust.
+//!
+//! ## Example
+//!
+//! ```rust
+//! use std::{
+//!     sync::{Arc, RwLock},
+//!     thread,
+//!     time::Duration,
+//! };
+//!
+//! use bmdse::{Button, SpeedEditor};
+//!
+//! fn main() {
+//!     // Because we go over a thread boundary inside the event handler callbacks,
+//!     // we have to wrap the state in Arc<RwLock<T>>.
+//!     let state = Arc::new(RwLock::new(State::default()));
+//!
+//!     let _speed_editor = SpeedEditor::new()
+//!         .unwrap()
+//!         .on_wheel_change({
+//!             let state = Arc::clone(&state);
+//!             move |velocity| {
+//!                 let mut state_guard = state.write().unwrap();
+//!                 state_guard.absolute_wheel_value += velocity as i64;
+//!             }
+//!         })
+//!         .on_button_change({
+//!             let state = Arc::clone(&state);
+//!             move |button, pressed| {
+//!                 if !pressed {
+//!                     return;
+//!                 };
+//!
+//!                 let mode = match button {
+//!                     Button::Timeline => Mode::Timeline,
+//!                     Button::Source => Mode::Source,
+//!                     _ => return,
+//!                 };
+//!
+//!                 let mut state_guard = state.write().unwrap();
+//!                 state_guard.mode = mode;
+//!             }
+//!         });
+//!
+//!     loop {
+//!         eprintln!("{:?}", state.read().unwrap());
+//!         thread::sleep(Duration::from_millis(20));
+//!     }
+//! }
+//!
+//! #[derive(Debug, Default)]
+//! struct State {
+//!     mode: Mode,
+//!     absolute_wheel_value: i64,
+//! }
+//!
+//! #[derive(Debug, Default)]
+//! enum Mode {
+//!     #[default]
+//!     Source,
+//!     Timeline,
+//! }
+//! ```
+//!
+//! You can run the examples using
+//!
+//! `cargo run --release --example simple` or `cargo run --release --example state`
+
 use std::{
     sync::{Arc, Mutex},
     thread,
@@ -9,16 +82,57 @@ mod error;
 
 use hidapi::HidDevice;
 
-use crate::driver::WheelMode;
+use crate::driver::{Report, WheelMode};
 
-pub use crate::driver::{Button, ButtonLed, Report, WheelLed};
+pub use crate::driver::{Button, ButtonLed, WheelLed};
 pub use crate::error::Error;
 
+/// The main interface to talk with the Speed Editor device.
+///
+/// It has a few callbacks you can use to listen for events (e.g. wheel changes, button presses or battery information),
+/// and some functions you can use to directly ask about the state of the device (e.g. button state, LED state or battery information).
+///
+/// On creation, it will spawn a new thread handling all the event polling, so you do not need to think about that.
+///
+/// # Example
+///
+/// ```
+/// use bmdse::{ButtonLed, SpeedEditor, WheelLed};
+///
+/// fn main() {
+///     let mut speed_editor = SpeedEditor::new()
+///         .unwrap()
+///         .on_wheel_change(|velocity| {
+///             eprintln!("wheel velocity: {velocity}");
+///         })
+///         .on_button_change(|button, pressed| {
+///             eprintln!("button {button:?} {}", if pressed { "pressed" } else { "released" });
+///         })
+///         .on_battery_info(|charging, percentage| {
+///             eprintln!("charging: {charging} | battery percentage: {percentage}%");
+///         });
+///
+///     speed_editor.set_button_led(ButtonLed::Cam1);
+///     speed_editor.set_wheel_led(WheelLed::Jog);
+///
+///     // Because the SpeedEditor spawns a new thread handling input,
+///     // we have to keep the main thread running.
+///     loop {}
+/// }
+/// ```
 pub struct SpeedEditor {
     inner: Arc<Mutex<Inner>>,
 }
 
 impl SpeedEditor {
+    /// Creates a new [`SpeedEditor`].
+    ///
+    /// # Errors
+    ///
+    /// This function might error when getting the HID device
+    /// (cannot be found, HID API already initialized, etc.).
+    ///
+    /// It will spawn a new thread, that handles all event polling.
     pub fn new() -> Result<Self, crate::Error> {
         let inner = Arc::new(Mutex::new(Inner {
             pressed_buttons: Vec::new(),
@@ -40,55 +154,75 @@ impl SpeedEditor {
         Ok(Self { inner })
     }
 
+    /// Provide a callback to handle a change of the jog wheel,
+    /// with its parameter being the wheel's velocity.
     pub fn on_wheel_change<F: Fn(i32) + Send + 'static>(mut self, f: F) -> Self {
         self.set_on_wheel_change(f);
         self
     }
 
+    /// Provide a callback to handle a change of the jog wheel,
+    /// with it's parameter being the wheel's velocity.
     pub fn set_on_wheel_change<F: Fn(i32) + Send + 'static>(&mut self, f: F) {
         self.inner.lock().unwrap().on_wheel_change = Some(Box::new(f));
     }
 
+    /// Provide a callback to handle a press or release of a button,
+    /// with its first parameter being the button,
+    /// and its second parameter telling if it's pressed (`true`) or released (`false`).
     pub fn on_button_change<F: Fn(Button, bool) + Send + 'static>(mut self, f: F) -> Self {
         self.set_on_button_change(f);
         self
     }
 
+    /// Provide a callback to handle a press or release of a button,
+    /// with its first parameter being the button,
+    /// and its second parameter telling if it's pressed (`true`) or released (`false`).
     pub fn set_on_button_change<F: Fn(Button, bool) + Send + 'static>(&mut self, f: F) {
         self.inner.lock().unwrap().on_button_change = Some(Box::new(f));
     }
 
+    /// Provide a callback to handle battery info,
+    /// with it's first parameter telling if it's charging, and the second parameter being
+    /// the battery percentage (`0..=100`).
     pub fn on_battery_info<F: Fn(bool, u8) + Send + 'static>(mut self, f: F) -> Self {
         self.set_on_battery_info(f);
         self
     }
 
+    /// Provide a callback to handle battery info,
+    /// with it's first parameter telling if it's charging, and the second parameter being
+    /// the battery percentage (`0..=100`).
     pub fn set_on_battery_info<F: Fn(bool, u8) + Send + 'static>(&mut self, f: F) {
         self.inner.lock().unwrap().on_battery_info = Some(Box::new(f));
     }
 
+    /// Returns `true` if the provided button is currently pressed.
     pub fn is_button_pressed(&self, button: Button) -> bool {
         self.inner.lock().unwrap().pressed_buttons.contains(&button)
     }
 
+    /// Returns a all currently pressed buttons.
     pub fn pressed_buttons(&self) -> Vec<Button> {
         self.inner.lock().unwrap().pressed_buttons.to_owned()
     }
 
-    pub fn set_wheel_led(&mut self, led: WheelLed) -> Result<(), crate::Error> {
+    /// Set the current wheel LED state.
+    pub fn set_wheel_led(&mut self, led: WheelLed) {
         self.inner.lock().unwrap().wheel_led = led;
-        Ok(())
     }
 
+    /// Get the current wheel LED state.
     pub fn get_wheel_led(&self) -> WheelLed {
         self.inner.lock().unwrap().wheel_led
     }
 
-    pub fn set_button_led(&mut self, led: ButtonLed) -> Result<(), crate::Error> {
+    /// Set the current button LED state.
+    pub fn set_button_led(&mut self, led: ButtonLed) {
         self.inner.lock().unwrap().button_led = led;
-        Ok(())
     }
 
+    /// Get the current button LED state.
     pub fn get_button_led(&self) -> ButtonLed {
         self.inner.lock().unwrap().button_led
     }

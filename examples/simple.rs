@@ -13,8 +13,8 @@ fn main() {
             eprintln!("charging: {charging} | battery percentage: {percentage}%");
         });
 
-    speed_editor.set_button_led(ButtonLed::Cam1).unwrap();
-    speed_editor.set_wheel_led(WheelLed::Jog).unwrap();
+    speed_editor.set_button_led(ButtonLed::Cam1);
+    speed_editor.set_wheel_led(WheelLed::Jog);
 
     // Because the SpeedEditor spawns a new thread handling input,
     // we have to keep the main thread running.

@@ -1,13 +1,22 @@
 use std::{error, fmt, io};
 
+/// Various error variants used in `bmdse`.
 #[derive(Debug)]
 pub enum Error {
+    /// An [io::Error][std::io::Error].
     Io(io::Error),
 
-    Driver { message: &'static str },
+    /// An error that occured in the driver.
+    Driver {
+        /// Information about what went wrong.
+        message: &'static str,
+    },
 
+    /// The BMD Speed Editor HID device was not found.
     HidDeviceNotFound,
+    /// The HID API already has been initialized.
     HidApiAlreadyInitialized,
+    /// Could not open the BMD Speed Editor HID device.
     CannotOpenHidDevice,
 }
 
