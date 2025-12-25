@@ -309,10 +309,7 @@ pub fn authenticate(device: &mut HidDevice) -> Result<u16, crate::Error> {
         .send_feature_report(&[0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00])
         .map_err(|_| crate::Error::Driver { message: "failed to send auth reset" })?;
 
-    fn get_feature<'a>(
-        buf: &'a mut [u8; 10],
-        device: &HidDevice,
-    ) -> Result<&'a [u8], crate::Error> {
+    fn feature<'a>(buf: &'a mut [u8; 10], device: &HidDevice) -> Result<&'a [u8], crate::Error> {
         // Prepare buffer and set the Report ID (0x06) before requesting it.
         // hidapi requires buf[0] to contain the report id for GET_FEATURE.
         *buf = [0x06, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00];
@@ -323,7 +320,7 @@ pub fn authenticate(device: &mut HidDevice) -> Result<u16, crate::Error> {
     }
 
     // Read the keyboard challenge (for keyboard to authenticate app)
-    let data = get_feature(&mut buf, device)
+    let data = feature(&mut buf, device)
         .map_err(|_| crate::Error::Driver { message: "failed to get keyboard challenge" })?;
     if data.len() < 10 {
         return Err(crate::Error::Driver { message: "authentication failed" });
@@ -343,7 +340,7 @@ pub fn authenticate(device: &mut HidDevice) -> Result<u16, crate::Error> {
 
     // Read the keyboard response
     // Again, we don't care, ignore the result
-    let data = get_feature(&mut buf, device)
+    let data = feature(&mut buf, device)
         .map_err(|_| crate::Error::Driver { message: "failed to get keyboard response" })?;
     if data.len() < 10 {
         return Err(crate::Error::Driver { message: "authentication failed" });
@@ -360,7 +357,7 @@ pub fn authenticate(device: &mut HidDevice) -> Result<u16, crate::Error> {
         .map_err(|_| crate::Error::Driver { message: "failed to send challenge response" })?;
 
     // Read the status
-    let data = get_feature(&mut buf, device)
+    let data = feature(&mut buf, device)
         .map_err(|_| crate::Error::Driver { message: "failed to get status" })?;
     if data.len() < 10 {
         return Err(crate::Error::Driver { message: "authentication failed" });

@@ -213,7 +213,7 @@ impl SpeedEditor {
     }
 
     /// Get the current wheel LED state.
-    pub fn get_wheel_led(&self) -> WheelLed {
+    pub fn wheel_led(&self) -> WheelLed {
         self.inner.lock().unwrap().wheel_led
     }
 
@@ -223,7 +223,7 @@ impl SpeedEditor {
     }
 
     /// Get the current button LED state.
-    pub fn get_button_led(&self) -> ButtonLed {
+    pub fn button_led(&self) -> ButtonLed {
         self.inner.lock().unwrap().button_led
     }
 }
