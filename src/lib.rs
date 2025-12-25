@@ -15,42 +15,40 @@
 //!
 //! use bmdse::{Button, SpeedEditor};
 //!
-//! fn main() {
-//!     // Because we go over a thread boundary inside the event handler callbacks,
-//!     // we have to wrap the state in Arc<RwLock<T>>.
-//!     let state = Arc::new(RwLock::new(State::default()));
+//! // Because we go over a thread boundary inside the event handler callbacks,
+//! // we have to wrap the state in Arc<RwLock<T>>.
+//! let state = Arc::new(RwLock::new(State::default()));
 //!
-//!     let _speed_editor = SpeedEditor::new()
-//!         .unwrap()
-//!         .on_wheel_change({
-//!             let state = Arc::clone(&state);
-//!             move |velocity| {
-//!                 let mut state_guard = state.write().unwrap();
-//!                 state_guard.absolute_wheel_value += velocity as i64;
-//!             }
-//!         })
-//!         .on_button_change({
-//!             let state = Arc::clone(&state);
-//!             move |button, pressed| {
-//!                 if !pressed {
-//!                     return;
-//!                 };
+//! let _speed_editor = SpeedEditor::new()
+//!     .unwrap()
+//!     .on_wheel_change({
+//!         let state = Arc::clone(&state);
+//!         move |velocity| {
+//!             let mut state_guard = state.write().unwrap();
+//!             state_guard.absolute_wheel_value += velocity as i64;
+//!         }
+//!     })
+//!     .on_button_change({
+//!         let state = Arc::clone(&state);
+//!         move |button, pressed| {
+//!             if !pressed {
+//!                 return;
+//!             };
 //!
-//!                 let mode = match button {
-//!                     Button::Timeline => Mode::Timeline,
-//!                     Button::Source => Mode::Source,
-//!                     _ => return,
-//!                 };
+//!             let mode = match button {
+//!                 Button::Timeline => Mode::Timeline,
+//!                 Button::Source => Mode::Source,
+//!                 _ => return,
+//!             };
 //!
-//!                 let mut state_guard = state.write().unwrap();
-//!                 state_guard.mode = mode;
-//!             }
-//!         });
+//!             let mut state_guard = state.write().unwrap();
+//!             state_guard.mode = mode;
+//!         }
+//!     });
 //!
-//!     loop {
-//!         eprintln!("{:?}", state.read().unwrap());
-//!         thread::sleep(Duration::from_millis(20));
-//!     }
+//! loop {
+//!     eprintln!("{:?}", state.read().unwrap());
+//!     thread::sleep(Duration::from_millis(20));
 //! }
 //!
 //! #[derive(Debug, Default)]
@@ -99,26 +97,24 @@ pub use crate::error::Error;
 /// ```
 /// use bmdse::{ButtonLed, SpeedEditor, WheelLed};
 ///
-/// fn main() {
-///     let mut speed_editor = SpeedEditor::new()
-///         .unwrap()
-///         .on_wheel_change(|velocity| {
-///             eprintln!("wheel velocity: {velocity}");
-///         })
-///         .on_button_change(|button, pressed| {
-///             eprintln!("button {button:?} {}", if pressed { "pressed" } else { "released" });
-///         })
-///         .on_battery_info(|charging, percentage| {
-///             eprintln!("charging: {charging} | battery percentage: {percentage}%");
-///         });
+/// let mut speed_editor = SpeedEditor::new()
+///     .unwrap()
+///     .on_wheel_change(|velocity| {
+///         eprintln!("wheel velocity: {velocity}");
+///     })
+///     .on_button_change(|button, pressed| {
+///         eprintln!("button {button:?} {}", if pressed { "pressed" } else { "released" });
+///     })
+///     .on_battery_info(|charging, percentage| {
+///         eprintln!("charging: {charging} | battery percentage: {percentage}%");
+///     });
 ///
-///     speed_editor.set_button_led(ButtonLed::Cam1);
-///     speed_editor.set_wheel_led(WheelLed::Jog);
+/// speed_editor.set_button_led(ButtonLed::Cam1);
+/// speed_editor.set_wheel_led(WheelLed::Jog);
 ///
-///     // Because the SpeedEditor spawns a new thread handling input,
-///     // we have to keep the main thread running.
-///     loop {}
-/// }
+/// // Because the SpeedEditor spawns a new thread handling input,
+/// // we have to keep the main thread running.
+/// loop {}
 /// ```
 pub struct SpeedEditor {
     inner: Arc<Mutex<Inner>>,
