@@ -85,4 +85,4 @@ If anyone knows what is going on here, feel free to create an issue, or even bet
 
 ## Contributing
 
-Feel free to start an issue to discuss about missing features or found bugs, it's OSS after all!
+Feel free to open an issue to discuss about missing features or found bugs, it's OSS after all!
